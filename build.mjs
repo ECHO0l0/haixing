@@ -10,6 +10,7 @@ await fs.access(path.join(root,'vault/manifest.json'));
 await fs.mkdir(path.join(root,'vendor'),{recursive:true});
 await build({stdin:{contents:"export { createClient } from '@supabase/supabase-js';",resolveDir:root},bundle:true,format:'esm',platform:'browser',minify:true,outfile:path.join(root,'vendor/supabase.js')});
 await build({stdin:{contents:"export { default } from 'morphdom';",resolveDir:root},bundle:true,format:'esm',platform:'browser',minify:true,outfile:path.join(root,'vendor/morphdom.js')});
+await build({stdin:{contents:"export { inject } from '@vercel/analytics';",resolveDir:root},bundle:true,format:'esm',platform:'browser',minify:true,outfile:path.join(root,'vendor/analytics.js')});
 await fs.rm(dist,{recursive:true,force:true});
 await fs.mkdir(dist,{recursive:true});
 for(const file of ['index.html','app.js','core.js','practice.js','sync.js','product.js','view.js','cloud-fetch.js','sync-model.js','sync-config.js','vendor','style.css','sw.js','icon.svg','icon-192.png','icon-512.png','icon-180.png','manifest.webmanifest','vault']) await fs.cp(path.join(root,file),path.join(dist,file),{recursive:true});
