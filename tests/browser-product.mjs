@@ -1,4 +1,5 @@
-import {chromium} from 'playwright';
+import {baseURL,launchTestBrowser} from './browser-helpers.mjs';
+import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {decrypt,unzip,flatten} from '../core.js';
@@ -9,7 +10,7 @@ const meta=catalog.find(b=>b.key==='theory-50033');
 const bank=await unzip(await decrypt(key,await fs.readFile(new URL('vault/'+meta.file,root)))),flat=flatten(bank),q=flat[0];
 const associated=flat.find(q=>q.legacyUid&&flat.filter(x=>x.legacyUid===q.legacyUid&&(x.titleText??x.title)===(q.titleText??q.title)).length===1);
 assert.equal(new Set(flat.map(q=>q.uid)).size,flat.length);
-const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'});
+const browser=await launchTestBrowser();
 const user={id:'22222222-2222-4222-8222-222222222222',email:'qa@example.invalid',aud:'authenticated',role:'authenticated'};
 const encode=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
 const token=encode({alg:'HS256',typ:'JWT'})+'.'+encode({sub:user.id,role:'authenticated',exp:Math.floor(Date.now()/1000)+3600})+'.qa';
@@ -17,7 +18,7 @@ const events=[],errors=[];let pushes=0,pulls=0;
 async function until(fn,label){for(let i=0;i<150;i++){if(await fn())return;await new Promise(r=>setTimeout(r,100));}throw Error('Timed out: '+label);}
 async function makePage(){
  const context=await browser.newContext({viewport:{width:1440,height:950},serviceWorkers:'block'}),page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
- await page.route('**/sync-config.js',r=>r.fulfill({contentType:'text/javascript',body:"export const syncConfig={url:'https://demo.supabase.co',publishableKey:'sb_publishable_test',relay:'http://127.0.0.1:4173'};"}));
+ await page.route('**/sync-config.js',r=>r.fulfill({contentType:'text/javascript',body:'export const syncConfig='+JSON.stringify({url:'https://demo.supabase.co',publishableKey:'sb_publishable_test',relay:baseURL})+';'}));
  await page.route('**/api/cloud?**',async route=>{
   const req=route.request(),url=new URL(req.url()),path=url.searchParams.get('path'),query=new URLSearchParams(url.searchParams.get('query'));let body={};
   if(path.startsWith('/auth/v1/token'))body={access_token:token,refresh_token:'qa-refresh',expires_in:3600,token_type:'bearer',user};
@@ -26,7 +27,7 @@ async function makePage(){
   else if(path==='/rest/v1/haixing_events'){pulls++;const cursor=Number((query.get('seq')||'gt.0').slice(3));body=events.filter(e=>e.seq>cursor);}
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
  });
- await page.goto('http://127.0.0.1:4173/#profile');await page.getByRole('button',{name:'登录 / 注册',exact:true}).click();await page.locator('#cloud-email').fill(user.email);await page.locator('#cloud-password').fill('qa-password');await page.getByRole('button',{name:'登录',exact:true}).click();await page.getByRole('button',{name:'立即同步',exact:true}).waitFor();await page.waitForFunction(()=>document.querySelector('.status-dot')?.textContent==='已同步');
+ await page.goto(baseURL+'/#profile');await page.getByRole('button',{name:'登录 / 注册',exact:true}).click();await page.locator('#cloud-email').fill(user.email);await page.locator('#cloud-password').fill('qa-password');await page.getByRole('button',{name:'登录',exact:true}).click();await page.getByRole('button',{name:'立即同步',exact:true}).waitFor();await page.waitForFunction(()=>document.querySelector('.status-dot')?.textContent==='已同步');
  return page;
 }
 async function sync(page){await page.locator('[data-action=cloud-sync]').click();await page.waitForFunction(()=>!document.querySelector('[data-action=cloud-sync]')?.disabled);}
@@ -35,8 +36,8 @@ try{
  await fs.mkdir('test-results',{recursive:true});const a=await makePage(),b=await makePage();
  await a.getByRole('button',{name:'返回学习概览',exact:true}).click();await a.waitForURL('**/#home');await a.getByRole('button',{name:'打开个人主页',exact:true}).click();await a.waitForURL('**/#profile');
  await a.locator('[data-action=edit-profile]').click();await a.locator('#profile-nickname').fill('远航学员');await a.locator('#profile-bio').fill('每天前进一点，向着下一程。');await a.locator('[data-action=pick-avatar][data-avatar="🧭"]').click();await a.locator('[data-action=save-profile]').click();await a.locator('.profile-heading h1').filter({hasText:'远航学员'}).waitFor();await sync(a);await sync(b);await until(async()=> (await read(b,'settings','user-profile'))?.nickname==='远航学员','profile sync');
- await a.reload();await a.locator('.profile-heading h1').filter({hasText:'远航学员'}).waitFor();await a.locator('[data-action=edit-profile]').click();await a.locator('#profile-avatar-file').setInputFiles(new URL('../icon-192.png',import.meta.url).pathname.replace(/^\//,''));await until(()=>a.locator('#profile-avatar-preview img').count(),'uploaded avatar');await a.locator('[data-action=save-profile]').click();await a.locator('.profile-intro .avatar img').waitFor();await sync(a);await sync(b);await until(async()=> (await read(b,'settings','user-profile'))?.avatar?.startsWith('data:image/webp'),'photo sync');await a.screenshot({path:'test-results/profile-desktop.png',fullPage:true});
- await a.goto('http://127.0.0.1:4173/#bank/'+meta.key);await a.locator('.chapter-row').first().waitFor();assert.equal(await a.locator('.chapter-group [data-action=custom]').count(),0);assert.equal(await a.locator('.custom-tools [data-action=custom]').count(),2);assert.equal(await a.locator('.chapter-ring').count(),bank.chapters.length);await a.waitForTimeout(900);
+ await a.reload();await a.locator('.profile-heading h1').filter({hasText:'远航学员'}).waitFor();await a.locator('[data-action=edit-profile]').click();await a.locator('#profile-avatar-file').setInputFiles(fileURLToPath(new URL('../icon-192.png',import.meta.url)));await until(()=>a.locator('#profile-avatar-preview img').count(),'uploaded avatar');await a.locator('[data-action=save-profile]').click();await a.locator('.profile-intro .avatar img').waitFor();await sync(a);await sync(b);await until(async()=> (await read(b,'settings','user-profile'))?.avatar?.startsWith('data:image/webp'),'photo sync');await a.screenshot({path:'test-results/profile-desktop.png',fullPage:true});
+ await a.goto(baseURL+'/#bank/'+meta.key);await a.locator('.chapter-row').first().waitFor();assert.equal(await a.locator('.chapter-group [data-action=custom]').count(),0);assert.equal(await a.locator('.custom-tools [data-action=custom]').count(),2);assert.equal(await a.locator('.chapter-ring').count(),bank.chapters.length);await a.waitForTimeout(900);
  await a.evaluate(()=>{window.__main=document.querySelector('.main');window.__chapter=document.querySelector('.chapter-row');window.scrollTo(0,document.body.scrollHeight-950);window.__y=scrollY;window.__mutations=0;new MutationObserver(r=>window.__mutations+=r.length).observe(document.querySelector('.main'),{subtree:true,childList:true,attributes:true,characterData:true});});const countBefore=pushes,pullsBefore=pulls;await a.waitForTimeout(11500);
  const quiet=await a.evaluate(()=>({same:window.__main===document.querySelector('.main')&&window.__chapter===document.querySelector('.chapter-row'),scroll:Math.abs(scrollY-window.__y),mutations:window.__mutations,y:scrollY}));assert.ok(quiet.same);assert.ok(quiet.y>500);assert.ok(quiet.scroll<2);assert.equal(quiet.mutations,0);assert.equal(pushes,countBefore);assert.ok(pulls>pullsBefore);
  await b.evaluate(async(q)=>{const c=await import('/core.js');await c.put('records',q.uid,{uid:q.uid,bank:q.bank,attempts:1,correctCount:1,lastAt:Date.now()});},{uid:q.uid,bank:bank.key});await sync(b);await until(async()=> (await a.locator('.chapter-row small').first().textContent()).includes('已刷 1 /'),'remote progress');assert.ok(await a.evaluate(()=>Math.abs(scrollY-window.__y)<2&&window.__chapter===document.querySelector('.chapter-row')));

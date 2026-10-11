@@ -1,7 +1,7 @@
-import{chromium}from'playwright';
+import{baseURL,launchTestBrowser}from'./browser-helpers.mjs';
 import assert from'node:assert/strict';
 import fs from'node:fs/promises';
-const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'});
+const browser=await launchTestBrowser();
 const user={id:'11111111-1111-4111-8111-111111111111',email:'test@example.invalid',aud:'authenticated',role:'authenticated'};
 const encoded=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
 const token=encoded({alg:'HS256',typ:'JWT'})+'.'+encoded({sub:user.id,role:'authenticated',exp:Math.floor(Date.now()/1000)+3600})+'.test';
@@ -17,7 +17,7 @@ async function makePage(){
   else if(url.pathname==='/rest/v1/haixing_events'){const cursor=Number((url.searchParams.get('seq')||'gt.0').slice(3));body=events.filter(e=>e.seq>cursor);}
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
  });
- await page.goto('http://127.0.0.1:4173/#profile');await page.getByRole('button',{name:'登录 / 注册',exact:true}).waitFor();
+ await page.goto(baseURL+'/#profile');await page.getByRole('button',{name:'登录 / 注册',exact:true}).waitFor();
  await page.getByRole('button',{name:'登录 / 注册',exact:true}).click();await page.locator('#cloud-email').fill(user.email);await page.locator('#cloud-password').fill('test-password');await page.getByRole('button',{name:'登录',exact:true}).click();await page.getByRole('button',{name:'立即同步',exact:true}).waitFor();await page.waitForFunction(()=>document.querySelector('.status-dot')?.textContent==='已同步');
  return page;
 }
