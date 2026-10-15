@@ -29,7 +29,7 @@ jobs:
       - run: npm run check
       - name: Save browser screenshots
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: browser-screenshots
           path: test-results/
